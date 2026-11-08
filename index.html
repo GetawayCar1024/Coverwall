@@ -12,10 +12,11 @@
     content="Coverwall turns a Spotify playlist into an album cover wall: every cover once, sized by track count, in a classic, heart, circle, diamond or hexagon shape."
   />
 
-  <link
-    rel="icon"
-    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231ed760'/%3E%3Crect x='6' y='6' width='12' height='12' fill='%23081b0e'/%3E%3Crect x='20' y='6' width='6' height='6' fill='%23081b0e'/%3E%3Crect x='20' y='14' width='6' height='12' fill='%23081b0e'/%3E%3Crect x='6' y='20' width='12' height='6' fill='%23081b0e'/%3E%3C/svg%3E"
-  />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-title" content="Coverwall" />
 </head>
 
 <body>
@@ -23,7 +24,7 @@
 
     <header class="topbar">
       <div class="brand">
-        <div class="brand-mark">▦</div>
+        <img class="brand-mark" src="/icon.svg" alt="" />
         <div>
           <b>Coverwall</b>
           <small data-i18n="tagline"></small>
@@ -32,13 +33,7 @@
 
       <div class="topbar-actions">
         <span id="spotifyStatus" class="status-pill" data-i18n="spotifyConnected" hidden></span>
-        <button
-          id="langBtn"
-          class="button"
-          type="button"
-          data-i18n="switchLanguage"
-          data-i18n-title="switchLanguageTitle"
-        ></button>
+        <button id="langBtn" class="button" type="button" data-i18n-title="switchLanguageTitle"><i data-icon="language"></i><span data-i18n="switchLanguage"></span></button>
       </div>
     </header>
 
@@ -55,8 +50,8 @@
           data-i18n-placeholder="playlistPlaceholder"
           data-i18n-title="playlistPlaceholder"
         />
-        <button id="importBtn" class="button primary" type="button" data-i18n="importButton"></button>
-        <button id="demoBtn" class="button" type="button" data-i18n="sampleButton"></button>
+        <button id="importBtn" class="button primary" type="button"><i data-icon="import"></i><span data-i18n="importButton"></span></button>
+        <button id="demoBtn" class="button" type="button"><i data-icon="sample"></i><span data-i18n="sampleButton"></span></button>
       </div>
 
       <p class="fine-print">
@@ -74,8 +69,8 @@
       </div>
 
       <div class="history">
-        <button id="undoBtn" class="button" type="button" data-i18n="undo" disabled></button>
-        <button id="redoBtn" class="button" type="button" data-i18n="redo" disabled></button>
+        <button id="undoBtn" class="button" type="button" disabled><i data-icon="undo"></i><span data-i18n="undo"></span></button>
+        <button id="redoBtn" class="button" type="button" disabled><i data-icon="redo"></i><span data-i18n="redo"></span></button>
       </div>
     </section>
 
@@ -98,8 +93,8 @@
 
         <div class="toolbar">
           <div id="shapePicker" class="segmented" role="radiogroup" data-i18n-title="shapeLabel"></div>
-          <button id="shuffleBtn" class="button" type="button" data-i18n="shuffle"></button>
-          <button id="mergeBtn" class="button" type="button" data-i18n="mergeSimilar"></button>
+          <button id="shuffleBtn" class="button" type="button"><i data-icon="shuffle"></i><span data-i18n="shuffle"></span></button>
+          <button id="mergeBtn" class="button" type="button"><i data-icon="merge"></i><span data-i18n="mergeSimilar"></span></button>
         </div>
       </section>
 
@@ -122,7 +117,7 @@
             <div id="versionPicker" class="versions" hidden>
               <span class="field-label" data-i18n="coverVersion"></span>
               <div id="versionList" class="version-list"></div>
-              <button id="splitBtn" class="link-button" type="button" data-i18n="splitVersions"></button>
+              <button id="splitBtn" class="link-button" type="button"><i data-icon="split"></i><span data-i18n="splitVersions"></span></button>
             </div>
 
             <label for="weightRange" class="field-label">
@@ -134,8 +129,8 @@
             <p id="areaInfo" class="hint"></p>
 
             <div class="button-pair">
-              <button id="resetWeightBtn" class="button" type="button" data-i18n="resetWeight"></button>
-              <button id="hideBtn" class="button" type="button"></button>
+              <button id="resetWeightBtn" class="button" type="button"><i data-icon="reset"></i><span data-i18n="resetWeight"></span></button>
+              <button id="hideBtn" class="button" type="button"><i id="hideIcon" data-icon="hide"></i><span id="hideLabel"></span></button>
             </div>
           </div>
         </section>
@@ -151,7 +146,7 @@
             <span data-i18n="showLabels"></span>
           </label>
 
-          <button id="resetAllBtn" class="button full" type="button" data-i18n="resetAll"></button>
+          <button id="resetAllBtn" class="button full" type="button"><i data-icon="reset"></i><span data-i18n="resetAll"></span></button>
         </section>
 
         <!-- Export -->
@@ -160,11 +155,11 @@
             <b data-i18n="exportHeading"></b>
           </div>
 
-          <button id="exportPngBtn" class="button primary full" type="button" data-i18n="exportPng"></button>
-          <button id="saveLayoutBtn" class="button full" type="button" data-i18n="saveJson"></button>
+          <button id="exportPngBtn" class="button primary full" type="button"><i data-icon="download"></i><span data-i18n="exportPng"></span></button>
+          <button id="saveLayoutBtn" class="button full" type="button"><i data-icon="fileDown"></i><span data-i18n="saveJson"></span></button>
 
           <label class="button full upload-label">
-            <span data-i18n="loadJson"></span>
+            <i data-icon="fileUp"></i><span data-i18n="loadJson"></span>
             <input id="loadLayoutInput" type="file" accept=".json,application/json" hidden />
           </label>
         </section>
@@ -188,9 +183,7 @@
         target="_blank"
         rel="noopener"
       >
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-        </svg>
+        <i data-icon="github"></i>
         GitHub
       </a>
     </footer>

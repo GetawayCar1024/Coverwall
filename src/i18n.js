@@ -13,7 +13,7 @@ const messages = {
     tagline: "歌单封面墙",
     switchLanguage: "EN",
     switchLanguageTitle: "Switch to English",
-    spotifyConnected: "● 已连接 Spotify",
+    spotifyConnected: "已连接 Spotify",
 
     importHeading: "导入歌单",
     playlistPlaceholder: "粘贴 Spotify 歌单链接",
@@ -25,8 +25,8 @@ const messages = {
     disconnect: "断开 Spotify",
 
     playlistLabel: "歌单",
-    undo: "↶ 撤销",
-    redo: "↷ 重做",
+    undo: "撤销",
+    redo: "重做",
     tracks: "曲目",
     albums: "专辑",
     artists: "艺人",
@@ -38,8 +38,8 @@ const messages = {
     shape_circle: "圆形",
     shape_diamond: "菱形",
     shape_hexagon: "六边形",
-    shuffle: "⤨ 打乱",
-    mergeSimilar: "⧉ 合并相似专辑",
+    shuffle: "打乱",
+    mergeSimilar: "合并相似专辑",
     grid: "{columns} × {rows}",
 
     editHeading: "编辑",
@@ -63,7 +63,7 @@ const messages = {
     versionsBadge: "{count} 个版本",
 
     exportHeading: "导出",
-    exportPng: "↓ 导出 PNG",
+    exportPng: "导出 PNG",
     saveJson: "保存布局（JSON）",
     loadJson: "载入布局（JSON）",
 
@@ -108,7 +108,7 @@ const messages = {
     tagline: "Playlist cover wall",
     switchLanguage: "中文",
     switchLanguageTitle: "切换到中文",
-    spotifyConnected: "● Spotify connected",
+    spotifyConnected: "Spotify connected",
 
     importHeading: "Import playlist",
     playlistPlaceholder: "Paste a Spotify playlist link",
@@ -120,8 +120,8 @@ const messages = {
     disconnect: "Disconnect Spotify",
 
     playlistLabel: "Playlist",
-    undo: "↶ Undo",
-    redo: "↷ Redo",
+    undo: "Undo",
+    redo: "Redo",
     tracks: "Tracks",
     albums: "Albums",
     artists: "Artists",
@@ -133,8 +133,8 @@ const messages = {
     shape_circle: "Circle",
     shape_diamond: "Diamond",
     shape_hexagon: "Hexagon",
-    shuffle: "⤨ Shuffle",
-    mergeSimilar: "⧉ Merge similar albums",
+    shuffle: "Shuffle",
+    mergeSimilar: "Merge similar albums",
     grid: "{columns} × {rows}",
 
     editHeading: "Edit",
@@ -158,7 +158,7 @@ const messages = {
     versionsBadge: "{count} versions",
 
     exportHeading: "Export",
-    exportPng: "↓ Export PNG",
+    exportPng: "Export PNG",
     saveJson: "Save layout (JSON)",
     loadJson: "Load layout (JSON)",
 

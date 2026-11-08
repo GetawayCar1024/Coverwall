@@ -43,15 +43,29 @@ button { cursor: pointer; }
 .brand { gap: 12px; }
 
 .brand-mark {
+  display: block;
   width: 42px;
   height: 42px;
-  border-radius: 12px;
-  background: #1ed760;
-  color: #081b0e;
-  display: grid;
-  place-items: center;
-  font-size: 25px;
 }
+
+/* Line icons from src/icons.js */
+
+[data-icon] { display: inline-flex; font-style: normal; }
+
+.icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.button, .link-button, .repo-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.link-button .icon, .repo-link .icon { width: 13px; height: 13px; }
 
 .brand b { display: block; font-size: 16px; letter-spacing: -.5px; }
 
@@ -70,6 +84,17 @@ button { cursor: pointer; }
   border: 1px solid #1ed76055;
   border-radius: 20px;
   padding: 5px 10px;
+}
+
+.status-pill::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
 }
 
 /* Buttons */
@@ -376,7 +401,10 @@ input[type=range] { width: 100%; accent-color: #eee; }
 }
 
 .panel .upload-label {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   margin: 8px 0 0;
   color: #eee;
   font-size: 12px;

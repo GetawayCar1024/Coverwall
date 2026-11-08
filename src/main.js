@@ -37,6 +37,8 @@ import {
   onLanguageChange
 } from "./i18n.js";
 
+import { renderIcons, setIcon } from "./icons.js";
+
 import "./style.css";
 
 const $ = id => document.getElementById(id);
@@ -129,10 +131,11 @@ function setPlaylist({ name, trackCount, albums }) {
 
 // Run an async action with a busy label on its button.
 async function withBusyButton(button, busyKey, action) {
-  const labelKey = button.dataset.i18n;
+  const label = button.querySelector("[data-i18n]");
+  const labelKey = label.dataset.i18n;
 
   button.disabled = true;
-  button.textContent = t(busyKey);
+  label.textContent = t(busyKey);
 
   try {
     await action();
@@ -140,7 +143,7 @@ async function withBusyButton(button, busyKey, action) {
     toast(error.message);
   } finally {
     button.disabled = false;
-    button.textContent = t(labelKey);
+    label.textContent = t(labelKey);
   }
 }
 
@@ -349,7 +352,8 @@ function renderInspector() {
   $("selectedArt").replaceChildren(img);
   $("selectedTitle").textContent = album.title;
   $("selectedArtist").textContent = album.artist;
-  $("hideBtn").textContent = t(album.hidden ? "show" : "hide");
+  $("hideLabel").textContent = t(album.hidden ? "show" : "hide");
+  setIcon($("hideIcon"), album.hidden ? "show" : "hide");
 
   renderVersions(album);
   syncWeightControls(album);
@@ -792,6 +796,7 @@ $("exportPngBtn").onclick = () => {
 // --------------------------------------------------
 
 async function init() {
+  renderIcons();
   applyTranslations();
   loadDemo();
   renderSpotifyStatus();

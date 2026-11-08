@@ -59,9 +59,15 @@ Spotify 开发模式的限制：
 - `src/spotify.js` PKCE 登录、token 刷新、歌单 API
 - `src/export.js` PNG 导出
 - `src/i18n.js` 中英文文案
+- `src/icons.js` 界面线性图标
 - `src/main.js` 界面与交互
+- `public/` 应用图标（`icon.svg` 为唯一源文件）与 Web App Manifest
 - `test/` `node --test` 测试
 
-## 说明
+## 许可 / License
 
-导出的图片包含 Spotify 提供的专辑封面，请仅用于个人用途，并遵守 Spotify 与版权方的条款。本项目与 Spotify 无隶属关系。
+代码以 [MIT License](LICENSE) 开源。
+
+MIT 许可只覆盖本项目的代码。专辑封面的版权归各自所有者：导出的图片包含 Spotify 提供的封面，请仅用于个人用途，并遵守 Spotify 与版权方的条款。本项目与 Spotify 无隶属关系。
+
+The code is released under the [MIT License](LICENSE). The license covers the code only — album artwork belongs to its respective owners. Not affiliated with Spotify.

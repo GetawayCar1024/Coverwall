@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "description": "Turn a Spotify playlist into an album cover wall.",
+  "license": "MIT",
+  "repository": "github:GetawayCar1024/Coverwall",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
