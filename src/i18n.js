@@ -15,8 +15,8 @@ const messages = {
     switchLanguageTitle: "Switch to English",
     spotifyConnected: "已连接 Spotify",
 
-    importHeading: "导入歌单",
-    playlistPlaceholder: "粘贴 Spotify 歌单链接",
+    importHeading: "导入",
+    playlistPlaceholder: "粘贴 Spotify 歌单、专辑、歌曲或艺人链接（可多个）",
     importButton: "导入",
     sampleButton: "示例歌单",
     importNote: "导入需要登录 Spotify。",
@@ -70,12 +70,15 @@ const messages = {
     footer: "封面版权归各自所有者。本项目与 Spotify 无关。",
 
     loading: "加载中…",
+    loadingProgress: "加载中 {done}/{total}",
     exporting: "导出中…",
     merging: "比较中…",
 
-    invalidUrl: "请输入有效的 Spotify 歌单链接。",
+    invalidUrl: "没有识别到 Spotify 歌单、专辑、歌曲或艺人链接。",
     redirecting: "正在跳转到 Spotify…",
     imported: "已导入「{name}」。",
+    importedSkipped: "已导入「{name}」，跳过了 {count} 个无法读取的歌单。",
+    defaultCollectionName: "我的封面墙",
     noCovers: "没有读取到专辑封面。",
     connected: "已连接 Spotify。",
     disconnected: "已断开 Spotify。",
@@ -100,7 +103,11 @@ const messages = {
     errMissingClientId: "缺少 Spotify Client ID。",
     errForbidden:
       "Spotify 拒绝访问：开发模式下只有加入应用用户名单的账号可用，且只能读取自己创建或协作的歌单。",
-    errNotFound: "找不到该歌单，或没有读取权限。"
+    errNotFound: "找不到该内容，或没有读取权限。",
+    errPlaylistNotOwned:
+      "Spotify 只开放你自己创建或协作的歌单内容，无法直接读取「{name}」。" +
+      "可以在 Spotify 桌面版打开该歌单，按 Ctrl/⌘+A 全选歌曲、Ctrl/⌘+C 复制，然后粘贴到这里导入；" +
+      "也可以粘贴到你自己的新歌单里，再导入那个歌单（更快）。"
   },
 
   en: {
@@ -110,8 +117,8 @@ const messages = {
     switchLanguageTitle: "切换到中文",
     spotifyConnected: "Spotify connected",
 
-    importHeading: "Import playlist",
-    playlistPlaceholder: "Paste a Spotify playlist link",
+    importHeading: "Import",
+    playlistPlaceholder: "Paste Spotify playlist, album, song or artist links (one or more)",
     importButton: "Import",
     sampleButton: "Sample playlist",
     importNote: "Importing requires a Spotify sign-in.",
@@ -165,12 +172,15 @@ const messages = {
     footer: "Artwork belongs to its respective owners. Not affiliated with Spotify.",
 
     loading: "Loading…",
+    loadingProgress: "Loading {done}/{total}",
     exporting: "Exporting…",
     merging: "Comparing…",
 
-    invalidUrl: "Enter a valid Spotify playlist link.",
+    invalidUrl: "No Spotify playlist, album, song or artist link found.",
     redirecting: "Redirecting to Spotify…",
     imported: "Imported “{name}”.",
+    importedSkipped: "Imported “{name}”. Skipped {count} playlists that couldn't be read.",
+    defaultCollectionName: "My cover wall",
     noCovers: "No album covers found.",
     connected: "Connected to Spotify.",
     disconnected: "Disconnected from Spotify.",
@@ -196,7 +206,11 @@ const messages = {
     errMissingClientId: "Missing Spotify Client ID.",
     errForbidden:
       "Spotify denied access. In development mode only allow-listed accounts can sign in, and only playlists you own or collaborate on can be read.",
-    errNotFound: "Playlist not found, or you don't have access to it."
+    errNotFound: "Not found, or you don't have access to it.",
+    errPlaylistNotOwned:
+      "Spotify only shares the contents of playlists you own or collaborate on, so “{name}” can't be read directly. " +
+      "Open it in the Spotify desktop app, press Ctrl/⌘+A to select all songs and Ctrl/⌘+C to copy them, then paste here. " +
+      "Or paste them into a new playlist of your own and import that one (faster)."
   }
 };
 

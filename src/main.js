@@ -8,8 +8,9 @@ import {
 } from "./layout.js";
 
 import {
-  fetchPlaylist,
-  getPlaylistId,
+  fetchCollection,
+  parseSpotifyLinks,
+  hasSpotifyLinks,
   getRedirectUri,
   hasCustomClientId,
   setCustomClientId,
@@ -102,11 +103,16 @@ function toast(message) {
   element.textContent = message;
   element.hidden = !message;
 
+  // Longer messages (e.g. instructions) stay up longer; click to close.
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => {
     element.hidden = true;
-  }, 4500);
+  }, Math.max(4500, String(message).length * 90));
 }
+
+$("toast").addEventListener("click", () => {
+  $("toast").hidden = true;
+});
 
 function visibleAlbums() {
   return state.albums.filter(album => !album.hidden);
@@ -621,23 +627,28 @@ async function startLogin(input) {
   await loginWithSpotify();
 }
 
-async function importPlaylist(input) {
-  const id = getPlaylistId(input);
-
-  if (!id) {
+async function importLinks(input) {
+  if (!hasSpotifyLinks(parseSpotifyLinks(input))) {
     toast(t("invalidUrl"));
     return;
   }
 
-  // Not signed in: remember the playlist and come back after login.
+  // Not signed in: remember the input and come back after login.
   if (!isConnected()) {
     await startLogin(input);
     return;
   }
 
-  await withBusyButton($("importBtn"), "loading", async () => {
+  const button = $("importBtn");
+  const label = button.querySelector("[data-i18n]");
+
+  await withBusyButton(button, "loading", async () => {
     try {
-      const result = await fetchPlaylist(id);
+      const result = await fetchCollection(input, {
+        onProgress: (done, total) => {
+          label.textContent = t("loadingProgress", { done, total });
+        }
+      });
 
       if (!result.albums.length) {
         throw new Error(t("noCovers"));
@@ -645,14 +656,21 @@ async function importPlaylist(input) {
 
       snapshot();
 
+      const name = result.name || t("defaultCollectionName");
+
       setPlaylist({
-        name: result.name,
+        name,
         trackCount: result.trackCount,
         albums: result.albums.map(album => ({ ...album, source: "spotify" }))
       });
 
       render();
-      toast(t("imported", { name: result.name }));
+
+      toast(
+        result.skippedPlaylists
+          ? t("importedSkipped", { name, count: result.skippedPlaylists })
+          : t("imported", { name })
+      );
     } catch (error) {
       // Session expired: sign in again and resume.
       if (error instanceof NotConnectedError) {
@@ -667,7 +685,7 @@ async function importPlaylist(input) {
   });
 }
 
-$("importBtn").onclick = () => importPlaylist($("playlistUrl").value.trim());
+$("importBtn").onclick = () => importLinks($("playlistUrl").value.trim());
 
 $("playlistUrl").addEventListener("keydown", e => {
   if (e.key === "Enter") $("importBtn").click();
@@ -815,7 +833,7 @@ async function init() {
     sessionStorage.removeItem(PENDING_IMPORT_KEY);
     $("playlistUrl").value = pending;
 
-    if (isConnected()) await importPlaylist(pending);
+    if (isConnected()) await importLinks(pending);
   }
 }
 

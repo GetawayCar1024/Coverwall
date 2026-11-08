@@ -245,114 +245,145 @@ export class NotConnectedError extends Error {
   }
 }
 
-async function spotifyFetch(url) {
-  const token = await getAccessToken();
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+async function spotifyFetch(url, { allowNotFound = false } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    const token = await getAccessToken();
 
-  const data = await response.json().catch(() => ({}));
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
 
-  if (response.status === 401) {
-    disconnect();
-    throw new NotConnectedError();
+    // Rate limited: wait as told (development mode quotas are small).
+    if (response.status === 429 && attempt < 4) {
+      const seconds = Number(response.headers.get("Retry-After")) || 2 ** attempt;
+      await sleep(Math.min(30, seconds) * 1000);
+      continue;
+    }
+
+    const data = await response.json().catch(() => ({}));
+
+    if (response.status === 401) {
+      disconnect();
+      throw new NotConnectedError();
+    }
+
+    if (response.status === 403) {
+      throw new Error(t("errForbidden"));
+    }
+
+    if (response.status === 404 || response.status === 400) {
+      if (allowNotFound) return null;
+      throw new Error(t("errNotFound"));
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data.error?.message || `Spotify API error ${response.status}`
+      );
+    }
+
+    return data;
   }
+}
 
-  if (response.status === 403) {
-    throw new Error(t("errForbidden"));
-  }
+// Run `task` over `items` with a few requests in flight at once.
+async function mapLimited(items, limit, task) {
+  const results = new Array(items.length);
+  let next = 0;
 
-  if (response.status === 404) {
-    throw new Error(t("errNotFound"));
-  }
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await task(items[index], index);
+    }
+  };
 
-  if (!response.ok) {
-    throw new Error(
-      data.error?.message || `Spotify API error ${response.status}`
-    );
-  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 
-  return data;
+  return results;
 }
 
 // --------------------------------------------------
-// Playlist import
+// Link parsing
 // --------------------------------------------------
 
-// Accepts open.spotify.com URLs (including /intl-xx/ paths)
-// and spotify:playlist:<id> URIs.
-export function getPlaylistId(input) {
-  const value = String(input || "").trim();
+const LINK_TYPES = ["playlist", "album", "track", "artist"];
 
-  if (!value) return null;
+const LINK_PATTERN = new RegExp(
+  "(?:open\\.spotify\\.com/(?:intl-[a-z-]+/)?(" + LINK_TYPES.join("|") + ")/" +
+  "|spotify:(" + LINK_TYPES.join("|") + "):)" +
+  "([A-Za-z0-9]{22})",
+  "g"
+);
 
-  const uriMatch = value.match(/^spotify:playlist:([a-zA-Z0-9]+)$/);
+/**
+ * Find every Spotify playlist / album / track / artist link or URI in a
+ * block of text, e.g. a single URL or the track links copied from the
+ * desktop app with Ctrl/Cmd+A, Ctrl/Cmd+C. Duplicates are dropped.
+ */
+export function parseSpotifyLinks(text) {
+  const found = { playlist: [], album: [], track: [], artist: [] };
+  const seen = new Set();
 
-  if (uriMatch) return uriMatch[1];
+  for (const match of String(text || "").matchAll(LINK_PATTERN)) {
+    const type = match[1] || match[2];
+    const id = match[3];
+    const key = `${type}:${id}`;
 
-  try {
-    const url = new URL(value);
-
-    if (/(^|\.)spotify\.com$/.test(url.hostname)) {
-      return url.pathname.match(/\/playlist\/([a-zA-Z0-9]+)/)?.[1] || null;
+    if (!seen.has(key)) {
+      seen.add(key);
+      found[type].push(id);
     }
-  } catch {
-    // Not an absolute URL.
   }
 
-  return null;
+  return found;
 }
 
-export async function fetchPlaylist(id) {
-  if (!id) {
-    throw new Error("Invalid Spotify playlist ID.");
+export function hasSpotifyLinks(links) {
+  return LINK_TYPES.some(type => links[type].length);
+}
+
+export class PlaylistNotOwnedError extends Error {
+  constructor(name) {
+    super(t("errPlaylistNotOwned", { name }));
+    this.name = "PlaylistNotOwnedError";
+  }
+}
+
+// --------------------------------------------------
+// Import
+// --------------------------------------------------
+
+function artistNames(album) {
+  return (album.artists || []).map(artist => artist.name).join(", ");
+}
+
+/**
+ * Collects albums and how many tracks each contributes. Albums that
+ * share the same cover image (e.g. standard and deluxe editions) are
+ * merged, so a cover never appears twice in the mosaic.
+ */
+class AlbumCollector {
+  constructor() {
+    this.albums = new Map();
+    this.keyByImage = new Map();
+    this.complete = new Set(); // albums added in full
+    this.trackCount = 0;
   }
 
-  const playlistUrl = `${API}/playlists/${encodeURIComponent(id)}`;
-
-  const meta = await spotifyFetch(playlistUrl);
-
-  const tracks = [];
-  let next = `${playlistUrl}/items?limit=50`;
-
-  while (next) {
-    const page = await spotifyFetch(next);
-
-    for (const entry of page.items || []) {
-      const track = entry.item || entry.track;
-
-      if (track?.type === "track" && track.album) {
-        tracks.push(track);
-      }
-    }
-
-    next = page.next;
-  }
-
-  // Group tracks by album. Albums that share the same cover image
-  // (e.g. standard and deluxe editions) are merged, so a cover never
-  // appears twice in the mosaic.
-  const grouped = new Map();
-  const keyByImage = new Map();
-
-  for (const { album } of tracks) {
+  key(album) {
     const image = album.images?.[0]?.url || "";
+    const key = (image && this.keyByImage.get(image)) || album.id || album.name;
 
-    const key =
-      (image && keyByImage.get(image)) ||
-      album.id ||
-      album.name;
+    if (image && !this.keyByImage.has(image)) this.keyByImage.set(image, key);
 
-    if (image && !keyByImage.has(image)) {
-      keyByImage.set(image, key);
-    }
-
-    if (!grouped.has(key)) {
-      grouped.set(key, {
+    if (!this.albums.has(key)) {
+      this.albums.set(key, {
         id: key,
         title: album.name,
-        artist: (album.artists || []).map(artist => artist.name).join(", "),
+        artist: artistNames(album),
         image,
         spotifyUrl: album.external_urls?.spotify || "",
         count: 0,
@@ -362,16 +393,150 @@ export async function fetchPlaylist(id) {
       });
     }
 
-    const item = grouped.get(key);
+    return key;
+  }
+
+  addTrack(album) {
+    const item = this.albums.get(this.key(album));
+
+    if (this.complete.has(item.id)) return;
 
     item.count += 1;
     item.weight += 1;
+    this.trackCount += 1;
   }
 
-  return {
-    name: meta.name || "Spotify Playlist",
-    url: meta.external_urls?.spotify || `https://open.spotify.com/playlist/${id}`,
-    trackCount: tracks.length,
-    albums: [...grouped.values()].filter(album => album.image)
-  };
+  // A whole album counts all of its tracks.
+  addAlbum(album) {
+    const item = this.albums.get(this.key(album));
+    const total = Math.max(1, Number(album.total_tracks) || album.tracks?.total || 1);
+    const extra = Math.max(0, total - item.count);
+
+    this.complete.add(item.id);
+    item.count += extra;
+    item.weight += extra;
+    this.trackCount += extra;
+  }
+
+  result(name) {
+    return {
+      name,
+      trackCount: this.trackCount,
+      albums: [...this.albums.values()].filter(album => album.image)
+    };
+  }
+}
+
+async function readPlaylist(id, collector) {
+  const url = `${API}/playlists/${encodeURIComponent(id)}`;
+  const meta = await spotifyFetch(url);
+
+  // Since February 2026 Spotify only returns the contents of playlists
+  // the user owns or collaborates on; others come back as metadata only.
+  if (!meta.items && !meta.tracks) {
+    throw new PlaylistNotOwnedError(meta.name || "");
+  }
+
+  let next = `${url}/items?limit=50`;
+
+  while (next) {
+    const page = await spotifyFetch(next);
+
+    for (const entry of page.items || []) {
+      const track = entry.item || entry.track;
+
+      if (track?.type === "track" && track.album) collector.addTrack(track.album);
+    }
+
+    next = page.next;
+  }
+
+  return meta.name;
+}
+
+async function readArtistAlbums(id, collector) {
+  const artist = await spotifyFetch(`${API}/artists/${encodeURIComponent(id)}`);
+
+  let next =
+    `${API}/artists/${encodeURIComponent(id)}/albums?include_groups=album&limit=10`;
+
+  while (next) {
+    const page = await spotifyFetch(next);
+
+    for (const album of page.items || []) collector.addAlbum(album);
+
+    next = page.next;
+  }
+
+  return artist.name;
+}
+
+/**
+ * Import everything referenced in `text`.
+ * `onProgress(done, total)` reports per-item lookups (albums, tracks).
+ * Returns { name, trackCount, albums, skippedPlaylists }.
+ */
+export async function fetchCollection(text, { onProgress = () => {} } = {}) {
+  const links = parseSpotifyLinks(text);
+  const collector = new AlbumCollector();
+  const names = [];
+  const skippedPlaylists = [];
+
+  for (const id of links.playlist) {
+    try {
+      names.push(await readPlaylist(id, collector));
+    } catch (error) {
+      if (!(error instanceof PlaylistNotOwnedError)) throw error;
+      skippedPlaylists.push(error);
+    }
+  }
+
+  for (const id of links.artist) {
+    names.push(await readArtistAlbums(id, collector));
+  }
+
+  const lookups = [
+    ...links.album.map(id => ({ type: "album", id })),
+    ...links.track.map(id => ({ type: "track", id }))
+  ];
+
+  let done = 0;
+  if (lookups.length) onProgress(0, lookups.length);
+
+  const results = await mapLimited(lookups, 4, async ({ type, id }) => {
+    const data = await spotifyFetch(
+      `${API}/${type}s/${encodeURIComponent(id)}`,
+      { allowNotFound: true }
+    );
+
+    onProgress(++done, lookups.length);
+
+    return data && { type, data };
+  });
+
+  // Add in input order so the collection list follows the pasted order.
+  for (const result of results) {
+    if (!result) continue;
+
+    if (result.type === "album") collector.addAlbum(result.data);
+    else if (result.data.album) collector.addTrack(result.data.album);
+  }
+
+  const collection = collector.result("");
+
+  if (!collection.albums.length && skippedPlaylists.length) {
+    throw skippedPlaylists[0];
+  }
+
+  const onlyAlbum =
+    !names.length && links.album.length === 1 && !links.track.length;
+
+  collection.name =
+    names.length === 1 && !lookups.length ? names[0]
+    : onlyAlbum ? collection.albums[0]?.title || ""
+    : "";
+
+  collection.skippedPlaylists = skippedPlaylists.length;
+
+  return collection;
 }
