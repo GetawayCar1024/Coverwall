@@ -690,13 +690,13 @@ function safeFilename(name) {
       .replace(/[\\/:*?"<>|]+/g, "")
       .trim()
       .replace(/\s+/g, "-")
-      .slice(0, 80) || "coverwall"
+      .slice(0, 80) || "Coverwall"
   );
 }
 
 $("saveLayoutBtn").onclick = () => {
   const payload = {
-    app: "coverwall",
+    app: "Coverwall",
     version: 4,
     layoutSeed: state.layoutSeed,
     shape: state.shape,

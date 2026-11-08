@@ -1,6 +1,6 @@
 # Coverwall · 歌单封面墙
 
-**在线使用 / Live:** https://getawaycar1024.github.io/coverwall/
+**在线使用 / Live:** https://getawaycar1024.github.io/Coverwall/
 
 把 Spotify 歌单变成一面专辑封面墙：每张封面只出现一次，面积随该专辑在歌单中的曲目数（或手动权重）变化，排列随机但始终是一个连通、对称的整体。
 
@@ -41,7 +41,7 @@ Spotify 开发模式的限制：
 
 - 只有在 Developer Dashboard → **User Management** 中添加的账号可以登录；
 - 只能读取当前用户创建或协作的歌单；
-- 每个部署地址都要加入 **Redirect URIs**，例如 `http://127.0.0.1:5173/` 和 `https://getawaycar1024.github.io/coverwall/`。
+- 每个部署地址都要加入 **Redirect URIs**，例如 `http://127.0.0.1:5173/` 和 `https://getawaycar1024.github.io/Coverwall/`。
 
 ## 排版算法 / Layout
 
