@@ -1,0 +1,16 @@
+{
+  "name": "spotify-album-art-treemap",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Turn a Spotify playlist into a tidy album art mosaic.",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
