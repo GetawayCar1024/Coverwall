@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildMosaic, getAreaDistribution } from "../src/layout.js";
+import { buildMosaic, getAreaDistribution, SHAPES } from "../src/layout.js";
 
 function makeAlbums(weights, prefix = "a") {
   return weights.map((weight, i) => ({
@@ -110,6 +110,64 @@ test("demo playlist forms a left-right symmetric outline", () => {
       }
     }
   }
+});
+
+function isConnected({ tiles }) {
+  const touches = (a, b) =>
+    ((a.x + a.size === b.x || b.x + b.size === a.x) &&
+      a.y < b.y + b.size && b.y < a.y + a.size) ||
+    ((a.y + a.size === b.y || b.y + b.size === a.y) &&
+      a.x < b.x + b.size && b.x < a.x + a.size);
+
+  const seen = new Set([0]);
+  const queue = [0];
+
+  while (queue.length) {
+    const current = tiles[queue.pop()];
+
+    tiles.forEach((tile, i) => {
+      if (!seen.has(i) && touches(current, tile)) {
+        seen.add(i);
+        queue.push(i);
+      }
+    });
+  }
+
+  return seen.size === tiles.length;
+}
+
+test("layouts are always one connected piece", () => {
+  for (const shape of SHAPES) {
+    for (const count of [2, 3, 4, 5, 8, 12, 16, 40]) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const albums = makeAlbums(
+          randomWeights(count, seed * 31 + count),
+          `${shape}-${count}-${seed}-`
+        );
+        const layout = buildMosaic(albums, { seed, shape });
+
+        assertValidLayout(layout, albums.map(a => a.id));
+        assert.ok(isConnected(layout), `${shape}, ${count} albums, seed ${seed}`);
+      }
+    }
+  }
+});
+
+test("preset shapes follow their outline", () => {
+  const albums = makeAlbums(randomWeights(120, 5), "big");
+
+  const coverage = shape => {
+    const { tiles, columns, rows } = buildMosaic(albums, { seed: 2, shape });
+    const area = tiles.reduce((sum, t) => sum + t.size * t.size, 0);
+
+    return area / (columns * rows);
+  };
+
+  // A full rectangle covers its bounding box; the presets do not.
+  assert.ok(coverage("classic") > 0.85);
+  assert.ok(coverage("circle") < 0.85 && coverage("circle") > 0.65);
+  assert.ok(coverage("diamond") < 0.65);
+  assert.ok(coverage("heart") < 0.85);
 });
 
 test("area distribution sums to 100%", () => {

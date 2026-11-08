@@ -2,20 +2,11 @@
 //
 // Render a mosaic layout to a PNG blob.
 
+import { loadImage } from "./images.js";
+import { t } from "./i18n.js";
+
 const EXPORT_WIDTH = 2400;
 const LABEL_MIN_SCREEN_PX = 96;
-
-// Fetch with CORS and no cache so the canvas is not tainted by a
-// cached, non-CORS copy of the image shown on screen.
-async function loadImage(src) {
-  const response = await fetch(src, { mode: "cors", cache: "no-store" });
-
-  if (!response.ok) {
-    throw new Error(`Image request failed: ${response.status}`);
-  }
-
-  return createImageBitmap(await response.blob());
-}
 
 // Same result as CSS object-fit: cover.
 function drawCover(ctx, image, x, y, size) {
@@ -122,7 +113,7 @@ export async function renderMosaicPng(
   );
 
   if (!blob) {
-    throw new Error("图片生成失败。");
+    throw new Error(t("pngFailed"));
   }
 
   return { blob, width: canvas.width, height: canvas.height, failed };

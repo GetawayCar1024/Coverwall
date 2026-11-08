@@ -32,10 +32,11 @@ const EXACT_SEARCH_LIMIT = 30;
 const EXACT_RESTARTS = 4;
 const EXACT_NODES = 2500;
 const EXACT_SOLUTIONS = 6;
+const DISCONNECTED_PENALTY = 1e6;
 
 let cache = { key: "", result: null };
 
-export function buildMosaic(items, { seed = 1 } = {}) {
+export function buildMosaic(items, { seed = 1, shape = "classic" } = {}) {
   const empty = { tiles: [], columns: 0, rows: 0 };
 
   if (!Array.isArray(items) || !items.length) return empty;
@@ -44,7 +45,9 @@ export function buildMosaic(items, { seed = 1 } = {}) {
 
   if (!albums.length) return empty;
 
-  const key = seed + "|" + albums
+  const preset = PRESETS[shape] ? shape : null;
+
+  const key = `${seed}|${preset || "classic"}|` + albums
     .map(item => `${item.id}:${getSafeWeight(item.weight)}`)
     .join(",");
 
@@ -93,12 +96,13 @@ export function buildMosaic(items, { seed = 1 } = {}) {
 
   // The greedy fill used for big collections works best when the
   // outline area matches the tiles exactly.
-  const shapes = shapeCandidates(
-    totalArea,
-    largest,
-    random,
-    exact ? 0 : 0.3
-  );
+  const shapes = preset
+    ? presetCandidates(preset, totalArea, largest, minTile, random)
+    : shapeCandidates(totalArea, largest, random, exact ? 0 : 0.3);
+
+  if (!shapes.length) {
+    shapes.push(...shapeCandidates(totalArea, largest, random, 0.3));
+  }
 
   const limits = { minTile, maxTile };
 
@@ -146,6 +150,10 @@ export function buildMosaic(items, { seed = 1 } = {}) {
         best = layout;
       }
     }
+  }
+
+  if (!best.connected) {
+    best = gravityPack(sized, random);
   }
 
   const result = {
@@ -254,7 +262,116 @@ function shapeCandidates(area, largest, random, exactness) {
     .map(entry => entry.shape);
 }
 
-function buildMask({ w, h, corners, nw, nh }) {
+/**
+ * Preset outlines. `inside(u, v)` gets coordinates in [-1, 1] with v
+ * pointing down; every shape is left-right symmetric.
+ */
+const PRESETS = {
+  heart: {
+    aspect: 1.02,
+    inside(u, v) {
+      const x = u * 1.14;
+      const y = 1.22 - (v + 1) * 1.11;
+      const a = x * x + y * y - 1;
+      return a * a * a - x * x * y * y * y <= 0;
+    }
+  },
+  circle: {
+    aspect: 1,
+    inside: (u, v) => u * u + v * v <= 1
+  },
+  diamond: {
+    aspect: 1,
+    inside: (u, v) => Math.abs(u) + Math.abs(v) <= 1.04
+  },
+  hexagon: {
+    aspect: 1.155,
+    inside: (u, v) => Math.abs(u) + Math.abs(v) * 0.5 <= 1
+  }
+};
+
+export const SHAPES = ["classic", ...Object.keys(PRESETS)];
+
+/**
+ * Rasterise a preset on a grid of `block`-sized cells, so outline
+ * steps are never smaller than the smallest tile.
+ */
+function presetMask(preset, bw, bh, block) {
+  const w = bw * block;
+  const h = bh * block;
+  const mask = new Uint8Array(w * h);
+  let space = 0;
+
+  for (let j = 0; j < bh; j++) {
+    for (let i = 0; i < bw; i++) {
+      const u = ((i + 0.5) / bw) * 2 - 1;
+      const v = ((j + 0.5) / bh) * 2 - 1;
+
+      if (!preset.inside(u, v)) continue;
+
+      for (let y = j * block; y < (j + 1) * block; y++) {
+        for (let x = i * block; x < (i + 1) * block; x++) {
+          mask[y * w + x] = 1;
+        }
+      }
+
+      space += block * block;
+    }
+  }
+
+  return { w, h, mask, space, preset: true };
+}
+
+function presetCandidates(name, area, largest, block, random) {
+  const preset = PRESETS[name];
+  const shapes = [];
+  const seen = new Set();
+
+  for (const stretch of [0.92, 1, 1.08]) {
+    const aspect = preset.aspect * stretch;
+    const sizeFor = bh => Math.max(1, Math.round(bh * aspect));
+
+    let bestH = 2;
+    let bestDiff = Infinity;
+
+    for (let bh = 2; bh < 200; bh++) {
+      const { space } = presetMask(preset, sizeFor(bh), bh, block);
+      const diff = Math.abs(space - area);
+
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestH = bh;
+      }
+
+      if (space > area * 1.3) break;
+    }
+
+    for (const bh of [bestH - 1, bestH, bestH + 1]) {
+      if (bh < 2) continue;
+
+      const shape = presetMask(preset, sizeFor(bh), bh, block);
+      const key = `${shape.w}x${shape.h}`;
+
+      if (seen.has(key) || Math.max(shape.w, shape.h) < largest) continue;
+      if (Math.abs(shape.space - area) > area * 0.25) continue;
+
+      seen.add(key);
+      shapes.push(shape);
+    }
+  }
+
+  return shapes
+    .map(shape => ({
+      shape,
+      rank: Math.abs(shape.space - area) / area * 25 + random()
+    }))
+    .sort((a, b) => a.rank - b.rank)
+    .map(entry => entry.shape);
+}
+
+function buildMask({ w, h, corners, nw, nh, mask: preset }) {
+  if (preset) return preset;
+
   const mask = new Uint8Array(w * h).fill(1);
 
   const cut = (x0, y0) => {
@@ -296,10 +413,14 @@ function sizeVariants(s, { minTile, maxTile }) {
 
 /**
  * Crop a layout to its bounding box and score how tidy its outline is.
- * Empty cells are fine only in mirrored corners; holes inside the
- * mosaic or dents in the middle of an edge are penalised.
+ * Classic outlines: empty cells are fine only in mirrored corners;
+ * holes inside the mosaic or dents in the middle of an edge are
+ * penalised. Preset outlines: scored by how closely they match the
+ * target mask. Disconnected layouts are always rejected.
  */
-function finishLayout(tiles, deviation, random) {
+function finishLayout(tiles, deviation, random, target = null) {
+  const mismatch = target ? maskMismatch(tiles, target) : 0;
+
   const minX = Math.min(...tiles.map(t => t.x));
   const minY = Math.min(...tiles.map(t => t.y));
 
@@ -337,6 +458,7 @@ function finishLayout(tiles, deviation, random) {
   // corner of the bounding box count as clean notches.
   const seen = new Uint8Array(w * h);
   let misplaced = 0;
+  let holes = 0;
 
   for (let start = 0; start < w * h; start++) {
     if (filled[start] || seen[start]) continue;
@@ -373,19 +495,139 @@ function finishLayout(tiles, deviation, random) {
       }
     }
 
-    if (!border) misplaced += size * 3;
-    else if (!corner) misplaced += size;
+    if (!border) {
+      holes += size;
+      misplaced += size * 3;
+    } else if (!corner) {
+      misplaced += size;
+    }
   }
 
+  const connected = isConnected(tiles, filled, w, h);
+
+  const outline = target
+    ? holes * 24 + mismatch * 5 + asymmetric
+    : misplaced * 8 + asymmetric * 3 + empty * 0.15 + Math.abs(w - h);
+
   const score =
-    misplaced * 8 +
-    asymmetric * 3 +
-    empty * 0.15 +
-    Math.abs(w - h) +
+    (connected ? 0 : DISCONNECTED_PENALTY) +
+    outline +
     deviation * 6 +
     random() * 1.5;
 
-  return { tiles, columns: w, rows: h, score };
+  return { tiles, columns: w, rows: h, score, connected };
+}
+
+// Cells covered outside the target plus target cells left empty.
+function maskMismatch(tiles, { w, h, mask, space }) {
+  let outside = 0;
+  let covered = 0;
+
+  for (const t of tiles) {
+    for (let y = t.y; y < t.y + t.size; y++) {
+      for (let x = t.x; x < t.x + t.size; x++) {
+        if (x < w && y < h && mask[y * w + x]) covered++;
+        else outside++;
+      }
+    }
+  }
+
+  return outside + (space - covered);
+}
+
+/**
+ * True when every tile can be reached from every other tile through
+ * shared edges (touching corners do not count).
+ */
+function isConnected(tiles, filled, w, h) {
+  if (tiles.length <= 1) return true;
+
+  const owner = new Int32Array(w * h).fill(-1);
+
+  tiles.forEach((t, k) => {
+    for (let y = t.y; y < t.y + t.size; y++) {
+      for (let x = t.x; x < t.x + t.size; x++) owner[y * w + x] = k;
+    }
+  });
+
+  const neighbours = tiles.map(() => new Set());
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const a = owner[y * w + x];
+      if (a < 0) continue;
+
+      const right = x + 1 < w ? owner[y * w + x + 1] : -1;
+      const below = y + 1 < h ? owner[(y + 1) * w + x] : -1;
+
+      for (const b of [right, below]) {
+        if (b >= 0 && b !== a) {
+          neighbours[a].add(b);
+          neighbours[b].add(a);
+        }
+      }
+    }
+  }
+
+  const seen = new Set([0]);
+  const queue = [0];
+
+  while (queue.length) {
+    for (const next of neighbours[queue.pop()]) {
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+
+  return seen.size === tiles.length;
+}
+
+/**
+ * Last-resort packer that is always connected: each tile drops to the
+ * highest free row, leftmost first, so it touches the tile above it or
+ * its left neighbour on the top row.
+ */
+function gravityPack(sized, random) {
+  const area = sized.reduce((sum, t) => sum + t.size * t.size, 0);
+  const largest = Math.max(...sized.map(t => t.size));
+  const w = Math.max(largest, Math.round(Math.sqrt(area)));
+
+  const rows = [];
+
+  const free = (x, y, s) => {
+    for (let yy = y; yy < y + s && yy < rows.length; yy++) {
+      for (let xx = x; xx < x + s; xx++) {
+        if (rows[yy][xx]) return false;
+      }
+    }
+
+    return true;
+  };
+
+  const order = shuffle([...sized], random).sort((a, b) => b.size - a.size);
+  const tiles = [];
+
+  for (const { item, size } of order) {
+    let spot = null;
+
+    for (let y = 0; !spot; y++) {
+      for (let x = 0; x + size <= w && !spot; x++) {
+        if (free(x, y, size)) spot = { x, y };
+      }
+    }
+
+    while (rows.length < spot.y + size) rows.push(new Uint8Array(w));
+
+    for (let yy = spot.y; yy < spot.y + size; yy++) {
+      for (let xx = spot.x; xx < spot.x + size; xx++) rows[yy][xx] = 1;
+    }
+
+    tiles.push({ id: item.id, album: item, x: spot.x, y: spot.y, size, area: size * size });
+  }
+
+  return finishLayout(tiles, 0, random);
 }
 
 /**
@@ -582,7 +824,7 @@ function solveShape(sized, shape, random, limits, nodeLimit) {
     area: t * t
   }));
 
-  return finishLayout(tiles, deviation, random);
+  return finishLayout(tiles, deviation, random, shape.preset ? shape : null);
 }
 
 function fillShape(sized, shape, random, { minTile, maxTile }) {
@@ -749,8 +991,16 @@ function fillShape(sized, shape, random, { minTile, maxTile }) {
     }
   }
 
-  // Anything that did not fit goes below the outline, kept near the
-  // middle so the shape stays as balanced as possible.
+  // Cells skipped as unfillable are open again for the leftovers.
+  for (const row of rows) {
+    for (let x = 0; x < w; x++) {
+      if (row[x] === 2) row[x] = 0;
+    }
+  }
+
+  // Anything that did not fit goes in the highest free spot, kept near
+  // the middle. Taking the highest row means each leftover rests against
+  // a tile above it, so the mosaic stays connected.
   const leftovers = sizes
     .flatMap(s => groups.get(s).items.map(item => ({ item, s })))
     .sort((a, b) => b.s - a.s);
@@ -782,7 +1032,7 @@ function fillShape(sized, shape, random, { minTile, maxTile }) {
     place(item, spot.x, spot.y, s);
   }
 
-  return finishLayout(tiles, deviation, random);
+  return finishLayout(tiles, deviation, random, shape.preset ? shape : null);
 }
 
 function shuffle(list, random) {

@@ -3,12 +3,14 @@
 import {
   buildMosaic,
   randomSeed,
-  getAreaDistribution
+  getAreaDistribution,
+  SHAPES
 } from "./layout.js";
 
 import {
   fetchPlaylist,
   getPlaylistId,
+  getRedirectUri,
   hasCustomClientId,
   setCustomClientId,
   isConnected,
@@ -18,7 +20,22 @@ import {
   NotConnectedError
 } from "./spotify.js";
 
+import {
+  hashCovers,
+  findMergeGroups,
+  mergeAlbums,
+  selectVariant,
+  splitAlbum
+} from "./merge.js";
+
 import { renderMosaicPng, LABEL_MIN_SCREEN_PX } from "./export.js";
+
+import {
+  t,
+  applyTranslations,
+  toggleLanguage,
+  onLanguageChange
+} from "./i18n.js";
 
 import "./style.css";
 
@@ -61,11 +78,11 @@ const state = {
   playlistName: "",
   trackCount: 0,
   layoutSeed: randomSeed(),
+  shape: "classic",
   selectedId: null
 };
 
 let showLabels = false;
-let keepManualWeights = false;
 
 let undoStack = [];
 let redoStack = [];
@@ -84,7 +101,6 @@ function toast(message) {
   element.hidden = !message;
 
   clearTimeout(toast.timer);
-
   toast.timer = setTimeout(() => {
     element.hidden = true;
   }, 4500);
@@ -109,6 +125,23 @@ function setPlaylist({ name, trackCount, albums }) {
   state.trackCount = trackCount;
   state.selectedId = null;
   state.layoutSeed = randomSeed();
+}
+
+// Run an async action with a busy label on its button.
+async function withBusyButton(button, busyKey, action) {
+  const labelKey = button.dataset.i18n;
+
+  button.disabled = true;
+  button.textContent = t(busyKey);
+
+  try {
+    await action();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = t(labelKey);
+  }
 }
 
 // --------------------------------------------------
@@ -159,29 +192,58 @@ function render() {
   const { albums } = state;
 
   $("playlistName").textContent = state.playlistName;
-  $("playlistMeta").textContent =
-    `Playlist · ${state.trackCount} tracks · ${albums.length} albums`;
-
   $("trackCount").textContent = state.trackCount;
   $("albumCount").textContent = albums.length;
   $("artistCount").textContent = new Set(albums.map(a => a.artist)).size;
-  $("shownCount").textContent = `${visibleAlbums().length} shown`;
+  $("shownCount").textContent = t("shownCount", {
+    shown: visibleAlbums().length,
+    total: albums.length
+  });
 
+  renderShapePicker();
   renderMosaic();
   renderList();
   renderInspector();
   updateHistoryButtons();
 }
 
+function renderShapePicker() {
+  const buttons = SHAPES.map(shape => {
+    const button = document.createElement("button");
+    const active = shape === state.shape;
+
+    button.type = "button";
+    button.className = "segment";
+    button.classList.toggle("active", active);
+    button.setAttribute("role", "radio");
+    button.setAttribute("aria-checked", String(active));
+    button.textContent = t(`shape_${shape}`);
+
+    button.addEventListener("click", () => {
+      if (state.shape === shape) return;
+
+      snapshot();
+      state.shape = shape;
+      render();
+    });
+
+    return button;
+  });
+
+  $("shapePicker").replaceChildren(...buttons);
+}
+
 function renderMosaic() {
   const container = $("treemap");
 
-  lastLayout = buildMosaic(visibleAlbums(), { seed: state.layoutSeed });
+  lastLayout = buildMosaic(visibleAlbums(), {
+    seed: state.layoutSeed,
+    shape: state.shape
+  });
 
   const { tiles, columns, rows } = lastLayout;
 
-  $("ratioLabel").textContent = columns ? `${columns} × ${rows} grid` : "";
-  $("gridInfo").textContent = columns ? `${columns} × ${rows}` : "—";
+  $("gridInfo").textContent = columns ? t("grid", { columns, rows }) : "";
 
   container.replaceChildren();
 
@@ -204,7 +266,7 @@ function renderMosaic() {
     tile.classList.toggle("selected", album.id === state.selectedId);
     tile.style.gridColumn = `${x + 1} / span ${size}`;
     tile.style.gridRow = `${y + 1} / span ${size}`;
-    tile.setAttribute("aria-label", `${album.title}, ${album.count} tracks`);
+    tile.setAttribute("aria-label", `${album.title} · ${album.artist}`);
 
     const img = document.createElement("img");
 
@@ -251,14 +313,16 @@ function renderList() {
     title.textContent = album.title;
 
     const artist = document.createElement("small");
-    artist.textContent = album.artist;
+    artist.textContent = album.variants?.length > 1
+      ? `${album.artist} · ${t("versionsBadge", { count: album.variants.length })}`
+      : album.artist;
 
     copy.append(title, artist);
 
     const count = document.createElement("span");
 
     count.className = "count-pill";
-    count.textContent = album.hidden ? "Hidden" : album.weight;
+    count.textContent = album.hidden ? t("hidden") : album.weight;
 
     row.append(img, copy, count);
     row.addEventListener("click", () => selectAlbum(album.id));
@@ -285,23 +349,61 @@ function renderInspector() {
   $("selectedArt").replaceChildren(img);
   $("selectedTitle").textContent = album.title;
   $("selectedArtist").textContent = album.artist;
-  $("hideBtn").textContent = album.hidden ? "Show this album" : "Hide this album";
+  $("hideBtn").textContent = t(album.hidden ? "show" : "hide");
 
+  renderVersions(album);
   syncWeightControls(album);
+}
+
+function renderVersions(album) {
+  const variants = album.variants || [];
+
+  $("versionPicker").hidden = variants.length < 2;
+
+  if (variants.length < 2) return;
+
+  const buttons = variants.map(variant => {
+    const button = document.createElement("button");
+
+    button.type = "button";
+    button.className = "version";
+    button.classList.toggle("active", variant.image === album.image);
+    button.title = `${variant.title} · ${t("versionTracks", { count: variant.count })}`;
+    button.setAttribute("aria-label", button.title);
+
+    const img = document.createElement("img");
+
+    img.src = variant.image;
+    img.alt = "";
+
+    button.append(img);
+
+    button.addEventListener("click", () => {
+      if (variant.image === album.image) return;
+
+      snapshot();
+      selectVariant(album, variant.id);
+      render();
+    });
+
+    return button;
+  });
+
+  $("versionList").replaceChildren(...buttons);
 }
 
 function syncWeightControls(album) {
   $("weightRange").value = Math.min(100, album.weight);
   $("weightNumber").value = album.weight;
-  $("weightOutput").textContent = album.weight;
 
   const entry = getAreaDistribution(state.albums).find(
     item => item.id === album.id
   );
 
-  $("areaInfo").textContent =
-    `Approx. area share: ${(entry?.percentage || 0).toFixed(1)}% · ` +
-    `Track count: ${album.count}`;
+  $("areaInfo").textContent = t("areaInfo", {
+    percent: (entry?.percentage || 0).toFixed(1),
+    count: album.count
+  });
 }
 
 // Labels depend on the on-screen tile size.
@@ -309,8 +411,15 @@ new ResizeObserver(() => {
   if (showLabels) renderMosaic();
 }).observe($("treemap"));
 
+onLanguageChange(() => {
+  render();
+  renderSpotifyStatus();
+});
+
+$("langBtn").onclick = toggleLanguage;
+
 // --------------------------------------------------
-// Weight editing
+// Editing
 // --------------------------------------------------
 
 function setWeight(value) {
@@ -334,10 +443,6 @@ function beginWeightEdit() {
   weightEditStarted = true;
 }
 
-function finishWeightEdit() {
-  weightEditStarted = false;
-}
-
 const weightRange = $("weightRange");
 
 weightRange.addEventListener("pointerdown", beginWeightEdit);
@@ -346,7 +451,9 @@ weightRange.addEventListener("input", e => {
   beginWeightEdit();
   setWeight(e.target.value);
 });
-weightRange.addEventListener("change", finishWeightEdit);
+weightRange.addEventListener("change", () => {
+  weightEditStarted = false;
+});
 
 $("weightNumber").addEventListener("change", e => {
   snapshot();
@@ -378,24 +485,21 @@ $("hideBtn").onclick = () => {
   render();
 };
 
-// Back to track counts; optionally keep hand-tuned weights.
-$("autoBtn").onclick = () => {
+$("splitBtn").onclick = () => {
+  const album = getAlbum(state.selectedId);
+
+  if (!album?.variants) return;
+
   snapshot();
 
-  for (const album of state.albums) {
-    if (keepManualWeights && album.manual) continue;
+  const parts = splitAlbum(album);
+  const index = state.albums.indexOf(album);
 
-    album.weight = album.count;
-    album.manual = false;
-  }
+  state.albums.splice(index, 1, ...parts);
+  state.selectedId = parts[0].id;
 
   render();
-
-  toast(
-    keepManualWeights
-      ? "已按歌曲数量重置权重（保留了手动设置的权重）。"
-      : "已按歌曲数量重置权重。"
-  );
+  toast(t("split", { count: parts.length }));
 };
 
 $("resetAllBtn").onclick = () => {
@@ -410,17 +514,9 @@ $("resetAllBtn").onclick = () => {
   render();
 };
 
-// --------------------------------------------------
-// Display controls
-// --------------------------------------------------
-
 $("labelsCheck").onchange = e => {
   showLabels = e.target.checked;
   renderMosaic();
-};
-
-$("keepManualCheck").onchange = e => {
-  keepManualWeights = e.target.checked;
 };
 
 $("shuffleBtn").onclick = () => {
@@ -431,6 +527,26 @@ $("shuffleBtn").onclick = () => {
   renderMosaic();
   updateHistoryButtons();
 };
+
+$("mergeBtn").onclick = () =>
+  withBusyButton($("mergeBtn"), "merging", async () => {
+    const hashes = await hashCovers(state.albums);
+    const groups = findMergeGroups(state.albums, hashes);
+
+    if (!groups.length) {
+      toast(t("nothingToMerge"));
+      return;
+    }
+
+    snapshot();
+
+    state.albums = mergeAlbums(state.albums, groups);
+
+    if (!getAlbum(state.selectedId)) state.selectedId = null;
+
+    render();
+    toast(t("merged", { count: groups.length }));
+  });
 
 // --------------------------------------------------
 // Demo
@@ -460,8 +576,6 @@ function loadDemo() {
 $("demoBtn").onclick = () => {
   snapshot();
   loadDemo();
-
-  $("message").textContent = "演示歌单已载入。";
 };
 
 // --------------------------------------------------
@@ -473,23 +587,20 @@ function renderSpotifyStatus() {
 
   $("spotifyStatus").hidden = !connected;
   $("disconnectBtn").hidden = !connected;
-
-  $("clientIdBtn").textContent = hasCustomClientId()
-    ? "正在使用自定义 Client ID · 修改"
-    : "使用自己的 Client ID";
+  $("clientIdBtn").textContent = t(
+    hasCustomClientId() ? "editOwnClientId" : "useOwnClientId"
+  );
 }
 
 $("disconnectBtn").onclick = () => {
   disconnect();
   renderSpotifyStatus();
-  toast("已断开 Spotify。");
+  toast(t("disconnected"));
 };
 
 $("clientIdBtn").onclick = () => {
   const value = prompt(
-    "输入你在 Spotify Developer Dashboard 创建的应用 Client ID。\n" +
-    `需要把 ${location.origin}${location.pathname.replace(/index\.html$/, "")} 加入该应用的 Redirect URIs。\n` +
-    "留空则恢复使用内置 Client ID。",
+    t("clientIdPrompt", { uri: getRedirectUri() }),
     hasCustomClientId() ? localStorage.getItem("sat_client_id") : ""
   );
 
@@ -497,64 +608,59 @@ $("clientIdBtn").onclick = () => {
 
   setCustomClientId(value);
   renderSpotifyStatus();
-
-  toast(value.trim() ? "已切换到自定义 Client ID。" : "已恢复内置 Client ID。");
+  toast(t(value.trim() ? "clientIdSet" : "clientIdReset"));
 };
+
+async function startLogin(input) {
+  sessionStorage.setItem(PENDING_IMPORT_KEY, input);
+  toast(t("redirecting"));
+  await loginWithSpotify();
+}
 
 async function importPlaylist(input) {
   const id = getPlaylistId(input);
 
   if (!id) {
-    toast("请输入有效的 Spotify playlist URL。");
+    toast(t("invalidUrl"));
     return;
   }
 
-  // Not logged in yet: remember the playlist and come back after login.
+  // Not signed in: remember the playlist and come back after login.
   if (!isConnected()) {
-    sessionStorage.setItem(PENDING_IMPORT_KEY, input);
-    $("message").textContent = "正在跳转到 Spotify 登录…";
-    await loginWithSpotify();
+    await startLogin(input);
     return;
   }
 
-  const button = $("importBtn");
+  await withBusyButton($("importBtn"), "loading", async () => {
+    try {
+      const result = await fetchPlaylist(id);
 
-  button.disabled = true;
-  button.textContent = "Loading…";
+      if (!result.albums.length) {
+        throw new Error(t("noCovers"));
+      }
 
-  try {
-    const result = await fetchPlaylist(id);
+      snapshot();
 
-    if (!result.albums.length) {
-      throw new Error("没有读取到专辑封面。");
+      setPlaylist({
+        name: result.name,
+        trackCount: result.trackCount,
+        albums: result.albums.map(album => ({ ...album, source: "spotify" }))
+      });
+
+      render();
+      toast(t("imported", { name: result.name }));
+    } catch (error) {
+      // Session expired: sign in again and resume.
+      if (error instanceof NotConnectedError) {
+        await startLogin(input);
+        return;
+      }
+
+      throw error;
+    } finally {
+      renderSpotifyStatus();
     }
-
-    snapshot();
-
-    setPlaylist({
-      name: result.name,
-      trackCount: result.trackCount,
-      albums: result.albums.map(album => ({ ...album, source: "spotify" }))
-    });
-
-    render();
-
-    $("message").textContent = "Spotify 歌单导入成功。";
-  } catch (error) {
-    if (error instanceof NotConnectedError) {
-      // Session expired: log in again and resume.
-      sessionStorage.setItem(PENDING_IMPORT_KEY, input);
-      await loginWithSpotify();
-      return;
-    }
-
-    toast(error.message);
-    $("message").textContent = "导入失败。";
-  } finally {
-    button.disabled = false;
-    button.textContent = "Import ↗";
-    renderSpotifyStatus();
-  }
+  });
 }
 
 $("importBtn").onclick = () => importPlaylist($("playlistUrl").value.trim());
@@ -584,23 +690,22 @@ function safeFilename(name) {
       .replace(/[\\/:*?"<>|]+/g, "")
       .trim()
       .replace(/\s+/g, "-")
-      .slice(0, 80) || "album-art"
+      .slice(0, 80) || "coverwall"
   );
 }
 
 $("saveLayoutBtn").onclick = () => {
   const payload = {
-    version: 3,
-    layout: "random-mosaic",
+    app: "coverwall",
+    version: 4,
     layoutSeed: state.layoutSeed,
-    columns: lastLayout.columns,
-    rows: lastLayout.rows,
+    shape: state.shape,
     playlistName: state.playlistName,
     trackCount: state.trackCount,
     showLabels,
     albums: state.albums.map(
-      ({ id, title, artist, count, weight, hidden, manual, image, spotifyUrl, source }) =>
-        ({ id, title, artist, count, weight, hidden, manual, image, spotifyUrl, source })
+      ({ id, title, artist, count, weight, hidden, manual, image, spotifyUrl, source, variants }) =>
+        ({ id, title, artist, count, weight, hidden, manual, image, spotifyUrl, source, variants })
     )
   };
 
@@ -616,10 +721,16 @@ $("loadLayoutInput").onchange = async e => {
   if (!file) return;
 
   try {
-    const data = JSON.parse(await file.text());
+    let data;
 
-    if (!Array.isArray(data.albums)) {
-      throw new Error("JSON 文件格式不正确。");
+    try {
+      data = JSON.parse(await file.text());
+    } catch {
+      data = null;
+    }
+
+    if (!Array.isArray(data?.albums)) {
+      throw new Error(t("invalidLayout"));
     }
 
     snapshot();
@@ -633,22 +744,20 @@ $("loadLayoutInput").onchange = async e => {
     }));
 
     setPlaylist({
-      name: data.playlistName || "Imported layout",
+      name: data.playlistName || "Coverwall",
       trackCount:
         data.trackCount || albums.reduce((sum, album) => sum + album.count, 0),
       albums
     });
 
-    if (Number.isInteger(data.layoutSeed)) {
-      state.layoutSeed = data.layoutSeed;
-    }
+    if (Number.isInteger(data.layoutSeed)) state.layoutSeed = data.layoutSeed;
+    if (SHAPES.includes(data.shape)) state.shape = data.shape;
 
     showLabels = !!data.showLabels;
     $("labelsCheck").checked = showLabels;
 
     render();
-
-    toast("布局已载入。");
+    toast(t("layoutLoaded"));
   } catch (error) {
     toast(error.message);
   } finally {
@@ -656,19 +765,13 @@ $("loadLayoutInput").onchange = async e => {
   }
 };
 
-$("exportPngBtn").onclick = async () => {
-  const button = $("exportPngBtn");
-  const label = button.textContent;
-
+$("exportPngBtn").onclick = () => {
   if (!lastLayout.tiles.length) {
-    toast("没有可以导出的封面。");
+    toast(t("nothingToExport"));
     return;
   }
 
-  button.disabled = true;
-  button.textContent = "Exporting…";
-
-  try {
+  return withBusyButton($("exportPngBtn"), "exporting", async () => {
     const { blob, width, height, failed } = await renderMosaicPng(lastLayout, {
       showLabels,
       screenUnit: $("treemap").clientWidth / lastLayout.columns
@@ -678,15 +781,10 @@ $("exportPngBtn").onclick = async () => {
 
     toast(
       failed
-        ? `已导出 PNG，其中 ${failed} 张封面无法加载，已用占位图代替。`
-        : `已导出 PNG（${width} × ${height}）。`
+        ? t("exportedWithFailures", { count: failed })
+        : t("exported", { width, height })
     );
-  } catch (error) {
-    toast(error.message);
-  } finally {
-    button.disabled = false;
-    button.textContent = label;
-  }
+  });
 };
 
 // --------------------------------------------------
@@ -694,13 +792,12 @@ $("exportPngBtn").onclick = async () => {
 // --------------------------------------------------
 
 async function init() {
+  applyTranslations();
   loadDemo();
   renderSpotifyStatus();
 
   try {
-    if (await handleOAuthCallback()) {
-      $("message").textContent = "Spotify 已连接。";
-    }
+    if (await handleOAuthCallback()) toast(t("connected"));
   } catch (error) {
     toast(error.message);
   }
@@ -713,9 +810,7 @@ async function init() {
     sessionStorage.removeItem(PENDING_IMPORT_KEY);
     $("playlistUrl").value = pending;
 
-    if (isConnected()) {
-      await importPlaylist(pending);
-    }
+    if (isConnected()) await importPlaylist(pending);
   }
 }
 

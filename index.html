@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#101010" />
 
-  <title>album / art — Album Mosaic Studio</title>
+  <title>Coverwall</title>
 
   <meta
     name="description"
-    content="Turn a Spotify playlist into a tidy album art mosaic. Every cover appears once, sized by how many tracks it has."
+    content="Coverwall turns a Spotify playlist into an album cover wall: every cover once, sized by track count, in a classic, heart, circle, diamond or hexagon shape."
   />
 
   <link
@@ -25,109 +25,93 @@
       <div class="brand">
         <div class="brand-mark">▦</div>
         <div>
-          <b>album / art</b>
-          <small>ALBUM MOSAIC STUDIO</small>
+          <b>Coverwall</b>
+          <small data-i18n="tagline"></small>
         </div>
       </div>
 
-      <span id="spotifyStatus" class="status-pill" hidden>
-        ● Spotify connected
-      </span>
+      <div class="topbar-actions">
+        <span id="spotifyStatus" class="status-pill" data-i18n="spotifyConnected" hidden></span>
+        <button
+          id="langBtn"
+          class="button"
+          type="button"
+          data-i18n="switchLanguage"
+          data-i18n-title="switchLanguageTitle"
+        ></button>
+      </div>
     </header>
 
     <!-- Import -->
     <section class="import-card">
       <div class="section-heading">
-        <b>Import playlist</b>
-        <span>01 / SOURCE</span>
+        <b data-i18n="importHeading"></b>
       </div>
 
       <div class="import-row">
         <input
           id="playlistUrl"
           type="url"
-          placeholder="粘贴 Spotify playlist URL…"
-          aria-label="Spotify playlist URL"
+          data-i18n-placeholder="playlistPlaceholder"
+          data-i18n-title="playlistPlaceholder"
         />
-
-        <button id="importBtn" class="button primary" type="button">
-          Import ↗
-        </button>
-      </div>
-
-      <div class="subrow">
-        <button id="demoBtn" class="button" type="button">
-          Try sample playlist
-        </button>
-
-        <span id="message">
-          当前为演示歌单，可以直接体验编辑和导出。
-        </span>
+        <button id="importBtn" class="button primary" type="button" data-i18n="importButton"></button>
+        <button id="demoBtn" class="button" type="button" data-i18n="sampleButton"></button>
       </div>
 
       <p class="fine-print">
-        导入歌单需要授权 Spotify，点击 Import 时会自动跳转登录。
-        <button id="clientIdBtn" class="link-button" type="button">
-          使用自己的 Client ID
-        </button>
-        <button id="disconnectBtn" class="link-button" type="button" hidden>
-          断开 Spotify
-        </button>
+        <span data-i18n="importNote"></span>
+        <button id="clientIdBtn" class="link-button" type="button"></button>
+        <button id="disconnectBtn" class="link-button" type="button" data-i18n="disconnect" hidden></button>
       </p>
     </section>
 
-    <!-- Playlist header -->
+    <!-- Playlist summary -->
     <section class="playlist-head">
       <div>
-        <small>YOUR PLAYLIST</small>
+        <small data-i18n="playlistLabel"></small>
         <h1 id="playlistName"></h1>
-        <p id="playlistMeta"></p>
       </div>
 
       <div class="history">
-        <button id="undoBtn" class="button" type="button" disabled>↶ Undo</button>
-        <button id="redoBtn" class="button" type="button" disabled>↷ Redo</button>
+        <button id="undoBtn" class="button" type="button" data-i18n="undo" disabled></button>
+        <button id="redoBtn" class="button" type="button" data-i18n="redo" disabled></button>
       </div>
     </section>
 
     <section class="stats">
-      <div><small>TRACKS</small><b id="trackCount">0</b></div>
-      <div><small>ALBUMS</small><b id="albumCount">0</b></div>
-      <div><small>ARTISTS</small><b id="artistCount">0</b></div>
+      <div><small data-i18n="tracks"></small><b id="trackCount">0</b></div>
+      <div><small data-i18n="albums"></small><b id="albumCount">0</b></div>
+      <div><small data-i18n="artists"></small><b id="artistCount">0</b></div>
     </section>
 
     <main class="workspace">
 
-      <!-- Mosaic -->
+      <!-- Cover wall -->
       <section class="canvas-column">
         <div class="section-heading">
-          <b>Album Mosaic</b>
-          <span>02 / VISUALIZE</span>
+          <b data-i18n="wallHeading"></b>
+          <span id="gridInfo"></span>
         </div>
 
-        <div id="treemap" class="mosaic" aria-label="Album art mosaic"></div>
-
-        <div class="canvas-caption">
-          <span>选择封面，通过 Weight 调整面积 · 每张封面只出现一次，随机排布</span>
-          <span id="ratioLabel"></span>
-        </div>
+        <div id="treemap" class="mosaic"></div>
 
         <div class="toolbar">
-          <button id="shuffleBtn" class="button" type="button">⤨ Shuffle</button>
-          <button id="autoBtn" class="button" type="button">↻ Reset to track counts</button>
+          <div id="shapePicker" class="segmented" role="radiogroup" data-i18n-title="shapeLabel"></div>
+          <button id="shuffleBtn" class="button" type="button" data-i18n="shuffle"></button>
+          <button id="mergeBtn" class="button" type="button" data-i18n="mergeSimilar"></button>
         </div>
       </section>
 
       <aside class="sidebar">
 
-        <!-- Inspector -->
+        <!-- Editor -->
         <section class="panel">
           <div class="section-heading">
-            <b>Inspector</b>
-            <span>03 / EDIT</span>
+            <b data-i18n="editHeading"></b>
           </div>
 
-          <p id="emptyInspector" class="hint">选择一张专辑封面，调整它的权重。</p>
+          <p id="emptyInspector" class="hint" data-i18n="editEmpty"></p>
 
           <div id="inspector" hidden>
             <div id="selectedArt" class="selected-art"></div>
@@ -135,93 +119,80 @@
             <h3 id="selectedTitle"></h3>
             <p id="selectedArtist" class="muted"></p>
 
-            <label for="weightRange">
-              Relative weight
-              <output id="weightOutput">1</output>
+            <div id="versionPicker" class="versions" hidden>
+              <span class="field-label" data-i18n="coverVersion"></span>
+              <div id="versionList" class="version-list"></div>
+              <button id="splitBtn" class="link-button" type="button" data-i18n="splitVersions"></button>
+            </div>
+
+            <label for="weightRange" class="field-label">
+              <span data-i18n="weight"></span>
+              <input id="weightNumber" type="number" min="1" max="10000" value="1" data-i18n-title="weight" />
             </label>
             <input id="weightRange" type="range" min="1" max="100" value="1" />
 
-            <label for="weightNumber">Custom weight</label>
-            <input id="weightNumber" type="number" min="1" max="10000" value="1" />
-
             <p id="areaInfo" class="hint"></p>
 
-            <button id="resetWeightBtn" class="button full" type="button">
-              Reset to track count
-            </button>
-            <button id="hideBtn" class="button full" type="button">
-              Hide this album
-            </button>
+            <div class="button-pair">
+              <button id="resetWeightBtn" class="button" type="button" data-i18n="resetWeight"></button>
+              <button id="hideBtn" class="button" type="button"></button>
+            </div>
           </div>
         </section>
 
-        <!-- Settings -->
+        <!-- Display -->
         <section class="panel settings">
           <div class="section-heading">
-            <b>Layout settings</b>
-          </div>
-
-          <div class="setting-row">
-            <span>Grid</span>
-            <span id="gridInfo">—</span>
+            <b data-i18n="settingsHeading"></b>
           </div>
 
           <label class="check">
             <input id="labelsCheck" type="checkbox" />
-            Show labels
+            <span data-i18n="showLabels"></span>
           </label>
 
-          <label class="check">
-            <input id="keepManualCheck" type="checkbox" />
-            Reset keeps manual weights
-          </label>
+          <button id="resetAllBtn" class="button full" type="button" data-i18n="resetAll"></button>
+        </section>
 
-          <button id="resetAllBtn" class="button full" type="button">
-            Reset all weights &amp; show all
-          </button>
+        <!-- Export -->
+        <section class="panel">
+          <div class="section-heading">
+            <b data-i18n="exportHeading"></b>
+          </div>
+
+          <button id="exportPngBtn" class="button primary full" type="button" data-i18n="exportPng"></button>
+          <button id="saveLayoutBtn" class="button full" type="button" data-i18n="saveJson"></button>
+
+          <label class="button full upload-label">
+            <span data-i18n="loadJson"></span>
+            <input id="loadLayoutInput" type="file" accept=".json,application/json" hidden />
+          </label>
         </section>
       </aside>
     </main>
 
-    <section class="bottom-grid">
+    <section class="panel album-panel">
+      <div class="section-heading">
+        <b data-i18n="albumListHeading"></b>
+        <span id="shownCount"></span>
+      </div>
 
-      <section class="panel">
-        <div class="section-heading">
-          <b>Album collection</b>
-          <span id="shownCount"></span>
-        </div>
-
-        <div id="albumList" class="album-list"></div>
-      </section>
-
-      <section class="panel">
-        <div class="section-heading">
-          <b>Export / Save</b>
-        </div>
-
-        <p class="hint">
-          将当前拼贴导出为 PNG 图片（角落空缺处为透明），
-          或保存布局及手动权重设置。JSON 文件可以重新载入并继续编辑。
-        </p>
-
-        <button id="exportPngBtn" class="button primary full" type="button">
-          ↓ Export PNG image
-        </button>
-
-        <button id="saveLayoutBtn" class="button full" type="button">
-          ↓ Save layout JSON
-        </button>
-
-        <label class="button full upload-label">
-          Load layout JSON
-          <input id="loadLayoutInput" type="file" accept=".json,application/json" hidden />
-        </label>
-      </section>
+      <div id="albumList" class="album-list"></div>
     </section>
 
     <footer>
-      Spotify artwork remains attributed to its Spotify source.
-      This is an independent community project, not affiliated with Spotify.
+      <span data-i18n="footer"></span>
+      <a
+        class="repo-link"
+        href="https://github.com/GetawayCar1024/coverwall"
+        target="_blank"
+        rel="noopener"
+      >
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        GitHub
+      </a>
     </footer>
 
     <div id="toast" role="status" aria-live="polite" hidden></div>

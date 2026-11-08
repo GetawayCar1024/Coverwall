@@ -4,6 +4,8 @@
 // PKCE needs no client secret, so the Client ID can safely ship in
 // the front-end bundle.
 
+import { t } from "./i18n.js";
+
 const AUTH = "https://accounts.spotify.com";
 const API = "https://api.spotify.com/v1";
 
@@ -102,7 +104,7 @@ export async function loginWithSpotify() {
   const clientId = getClientId();
 
   if (!clientId) {
-    throw new Error("缺少 Spotify Client ID。");
+    throw new Error(t("errMissingClientId"));
   }
 
   const verifier = randomString(64);
@@ -141,8 +143,8 @@ export async function handleOAuthCallback() {
     clearCallbackUrl();
     throw new Error(
       error === "access_denied"
-        ? "已取消 Spotify 授权。"
-        : `Spotify 授权失败：${error}`
+        ? t("errAuthCancelled")
+        : t("errAuthFailed", { error })
     );
   }
 
@@ -159,7 +161,7 @@ export async function handleOAuthCallback() {
 
   if (!state || state !== localStorage.getItem(STATE_KEY) || !verifier) {
     localStorage.removeItem(STATE_KEY);
-    throw new Error("登录校验失败，请重新连接 Spotify。");
+    throw new Error(t("errAuthState"));
   }
 
   localStorage.removeItem(STATE_KEY);
@@ -238,7 +240,7 @@ async function getAccessToken() {
 
 export class NotConnectedError extends Error {
   constructor() {
-    super("请先连接 Spotify。");
+    super(t("errNotConnected"));
     this.name = "NotConnectedError";
   }
 }
@@ -258,14 +260,11 @@ async function spotifyFetch(url) {
   }
 
   if (response.status === 403) {
-    throw new Error(
-      "Spotify 拒绝访问（403）：应用处于开发模式时，只有被加入应用用户名单的账号可以使用，" +
-      "且只能读取你创建或协作的歌单。"
-    );
+    throw new Error(t("errForbidden"));
   }
 
   if (response.status === 404) {
-    throw new Error("找不到这个歌单，或你没有权限读取它。");
+    throw new Error(t("errNotFound"));
   }
 
   if (!response.ok) {
